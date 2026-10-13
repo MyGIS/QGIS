@@ -67,6 +67,8 @@
 #include <QUndoView>
 #include <QUrl>
 
+#include <functional>
+
 #include "moc_qgsmodeldesignerdialog.cpp"
 
 using namespace Qt::StringLiterals;
@@ -148,7 +150,10 @@ QgsModelDesignerDialog::QgsModelDesignerDialog( QWidget *parent, Qt::WindowFlags
   mToolboxTree->header()->setVisible( false );
   mToolboxSearchEdit->setShowSearchIcon( true );
   mToolboxSearchEdit->setPlaceholderText( tr( "Search…" ) );
-  connect( mToolboxSearchEdit, &QgsFilterLineEdit::textChanged, mToolboxTree, &QgsProcessingToolboxTreeView::setFilterString );
+  mInputsSearchEdit->setShowSearchIcon( true );
+  mInputsSearchEdit->setPlaceholderText( tr( "Search…" ) );
+  connect( mToolboxSearchEdit, &QgsFilterLineEdit::textChanged, this, &QgsModelDesignerDialog::applyDockSearchFilter );
+  connect( mInputsSearchEdit, &QgsFilterLineEdit::textChanged, this, &QgsModelDesignerDialog::applyDockSearchFilter );
 
   mInputsTreeWidget->header()->setVisible( false );
   mInputsTreeWidget->setAlternatingRowColors( true );
@@ -1850,6 +1855,54 @@ void QgsModelDesignerDialog::reorderOutputs()
 bool QgsModelDesignerDialog::isDirty() const
 {
   return mHasChanged && mUndoStack->index() != -1;
+}
+
+void QgsModelDesignerDialog::applyDockSearchFilter( const QString &filter )
+{
+  mToolboxTree->setFilterString( filter );
+  filterInputsTree( filter );
+
+  if ( sender() == mToolboxSearchEdit )
+  {
+    if ( mInputsSearchEdit->text() != filter )
+    {
+      mInputsSearchEdit->blockSignals( true );
+      mInputsSearchEdit->setText( filter );
+      mInputsSearchEdit->blockSignals( false );
+    }
+  }
+  else if ( sender() == mInputsSearchEdit )
+  {
+    if ( mToolboxSearchEdit->text() != filter )
+    {
+      mToolboxSearchEdit->blockSignals( true );
+      mToolboxSearchEdit->setText( filter );
+      mToolboxSearchEdit->blockSignals( false );
+    }
+  }
+}
+
+void QgsModelDesignerDialog::filterInputsTree( const QString &filter )
+{
+  std::function<void( QTreeWidgetItem *, const QString & )> filterItem;
+  filterItem = [&filterItem]( QTreeWidgetItem *item, const QString &text ) {
+    bool childVisible = false;
+    for ( int i = 0; i < item->childCount(); ++i )
+    {
+      QTreeWidgetItem *child = item->child( i );
+      filterItem( child, text );
+      if ( !child->isHidden() )
+        childVisible = true;
+    }
+
+    if ( item->childCount() > 0 )
+      item->setHidden( !text.isEmpty() && !childVisible );
+    else
+      item->setHidden( !text.isEmpty() && !item->text( 0 ).contains( text, Qt::CaseInsensitive ) );
+  };
+
+  for ( int i = 0; i < mInputsTreeWidget->topLevelItemCount(); ++i )
+    filterItem( mInputsTreeWidget->topLevelItem( i ), filter );
 }
 
 void QgsModelDesignerDialog::fillInputsTree()

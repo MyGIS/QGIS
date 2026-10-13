@@ -292,6 +292,8 @@ class GUI_EXPORT QgsModelDesignerDialog : public QMainWindow,
     bool isDirty() const;
 
     void fillInputsTree();
+    void applyDockSearchFilter( const QString &filter );
+    void filterInputsTree( const QString &filter );
     void updateVariablesGui();
 
     struct PanelStatus
